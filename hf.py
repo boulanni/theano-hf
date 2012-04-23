@@ -65,7 +65,8 @@ train :
     HJv = T.grad(T.sum(T.grad(costs[0], s)*Jv), s, consider_constant=[Jv])
     Gv = T.grad(T.sum(HJv*s), p, consider_constant=[HJv, Jv])
     Gv = map(T.as_tensor_variable, Gv)  # for CudaNdarray
-    self.function_Gv = theano.function(inputs + v + [coefficient], Gv, givens=givens)
+    self.function_Gv = theano.function(inputs + v + [coefficient], Gv, givens=givens,
+                                       on_unused_input='ignore')
 
   def quick_cost(self, delta=0):
     # quickly evaluate objective (costs[0]) over the CG batch
@@ -248,7 +249,7 @@ train :
           self.lambda_ /= 1.5
         
         if validation is not None and u % validation_frequency == 0:
-          if isinstance(validation, SequenceDataset):
+          if validation.__class__.__name__ == 'SequenceDataset':
             costs = numpy.mean([self.f_cost(*i) for i in validation.iterate()], axis=0)
           elif callable(validation):
             costs = validation()
