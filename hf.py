@@ -1,5 +1,5 @@
 # Author: Nicolas Boulanger-Lewandowski
-# University of Montreal, 2012
+# University of Montreal, 2012-2013
 
 
 import numpy, sys
@@ -8,6 +8,14 @@ import theano.tensor as T
 import cPickle
 import os
 
+
+
+def gauss_newton_product(cost, p, v, s):  # this computes the product Gv = J'HJv (G is the Gauss-Newton matrix)
+  Jv = T.Rop(s, p, v)
+  HJv = T.grad(T.sum(T.grad(cost, s)*Jv), s, consider_constant=[Jv], disconnected_inputs='ignore')
+  Gv = T.grad(T.sum(HJv*s), p, consider_constant=[HJv, Jv], disconnected_inputs='ignore')
+  Gv = map(T.as_tensor_variable, Gv)  # for CudaNdarray
+  return Gv
 
 
 class hf_optimizer:
@@ -45,26 +53,24 @@ train :
 
     g = T.grad(costs[0], p)
     g = map(T.as_tensor_variable, g)  # for CudaNdarray
-    self.f_gc = theano.function(inputs, g + costs)  # during gradient computation
-    self.f_cost = theano.function(inputs, costs)  # for quick cost evaluation
+    self.f_gc = theano.function(inputs, g + costs, on_unused_input='ignore')  # during gradient computation
+    self.f_cost = theano.function(inputs, costs, on_unused_input='ignore')  # for quick cost evaluation
 
     symbolic_types = T.scalar, T.vector, T.matrix, T.tensor3, T.tensor4
+
+    v = [symbolic_types[len(i)]() for i in self.shapes]
+    Gv = gauss_newton_product(costs[0], p, v, s)
 
     coefficient = T.scalar()  # this is lambda*mu    
     if h is not None:  # structural damping with cross-entropy
       h_constant = symbolic_types[h.ndim]()  # T.Rop does not support `consider_constant` yet, so use `givens`
-      structural_damping = coefficient * (-h_constant*T.log(h) - (1-h_constant)*T.log(1-h)).sum() / h.shape[0]
-      costs[0] += structural_damping
+      structural_damping = coefficient * (-h_constant*T.log(h + 1e-10) - (1-h_constant)*T.log((1-h) + 1e-10)).sum() / h.shape[0]
+      Gv_damping = gauss_newton_product(structural_damping, p, v, h)
+      Gv = [a + b for a, b in zip(Gv, Gv_damping)]
       givens = {h_constant: h}
     else:
       givens = {}
 
-    # this computes the product Gv = J'HJv (G is the Gauss-Newton matrix)
-    v = [symbolic_types[len(i)]() for i in self.shapes]
-    Jv = T.Rop(s, p, v)
-    HJv = T.grad(T.sum(T.grad(costs[0], s)*Jv), s, consider_constant=[Jv])
-    Gv = T.grad(T.sum(HJv*s), p, consider_constant=[HJv, Jv])
-    Gv = map(T.as_tensor_variable, Gv)  # for CudaNdarray
     self.function_Gv = theano.function(inputs + v + [coefficient], Gv, givens=givens,
                                        on_unused_input='ignore')
 
@@ -249,7 +255,7 @@ train :
           self.lambda_ /= 1.5
         
         if validation is not None and u % validation_frequency == 0:
-          if validation.__class__.__name__ == 'SequenceDataset':
+          if hasattr(validation, 'iterate'):
             costs = numpy.mean([self.f_cost(*i) for i in validation.iterate()], axis=0)
           elif callable(validation):
             costs = validation()
