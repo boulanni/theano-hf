@@ -145,7 +145,7 @@ def example_RNN(hf=True):
   valid_dataset = SequenceDataset(valid, batch_size=None, number_batches=1000)
 
   if hf:
-    hf_optimizer(p, inputs, s, costs, h).train(gradient_dataset, cg_dataset, initial_lambda=0.5, mu=0.2, preconditioner=False, validation=valid_dataset)
+    hf_optimizer(p, inputs, s, costs, 0.5*(h + 1)).train(gradient_dataset, cg_dataset, initial_lambda=0.5, mu=1.0, preconditioner=False, validation=valid_dataset)
   else:
     sgd_optimizer(p, inputs, costs, gradient_dataset, lr=5e-5)    
 
