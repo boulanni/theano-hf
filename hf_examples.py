@@ -115,23 +115,25 @@ def simple_RNN(nh):
   x = T.matrix()
 
   def recurrence(x_t, h_tm1):
-    h_t = T.tanh(T.dot(x_t, Wx) + T.dot(h_tm1, Wh) + bh)
+    ha_t = T.dot(x_t, Wx) + T.dot(h_tm1, Wh) + bh
+    h_t = T.tanh(ha_t)
     s_t = T.dot(h_t, Wy) + by
-    return [h_t, s_t]
+    return [ha_t, h_t, s_t]
 
-  ([h, activations], updates) = theano.scan(fn=recurrence, sequences=x, outputs_info=[h0, dict()])
+  ([ha, h, activations], updates) = theano.scan(fn=recurrence, sequences=x, outputs_info=[dict(), h0, dict()])
 
+  h = T.tanh(ha)  # so it is differentiable with respect to ha
   t = x[0, 0]
   s = activations[-1, 0]
   y = T.nnet.sigmoid(s)
   loss = -t*T.log(y + 1e-14) - (1-t)*T.log((1-y) + 1e-14)
   acc = T.neq(T.round(y), t)
   
-  return p, [x], s, [loss, acc], h
+  return p, [x], s, [loss, acc], h, ha
 
 
 def example_RNN(hf=True):
-  p, inputs, s, costs, h = simple_RNN(100)
+  p, inputs, s, costs, h, ha = simple_RNN(100)
 
   memorization_dataset = [[]]  # memorize the first unit for 100 time-steps with binary noise
   for i in xrange(100000):
@@ -145,7 +147,7 @@ def example_RNN(hf=True):
   valid_dataset = SequenceDataset(valid, batch_size=None, number_batches=1000)
 
   if hf:
-    hf_optimizer(p, inputs, s, costs, 0.5*(h + 1)).train(gradient_dataset, cg_dataset, initial_lambda=0.5, mu=1.0, preconditioner=False, validation=valid_dataset)
+    hf_optimizer(p, inputs, s, costs, 0.5*(h + 1), ha).train(gradient_dataset, cg_dataset, initial_lambda=0.5, mu=1.0, preconditioner=False, validation=valid_dataset)
   else:
     sgd_optimizer(p, inputs, costs, gradient_dataset, lr=5e-5)    
 

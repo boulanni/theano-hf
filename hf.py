@@ -28,7 +28,7 @@ __init__ :
 train :
     Performs HF optimization following the above references.'''
 
-  def __init__(self, p, inputs, s, costs, h=None):
+  def __init__(self, p, inputs, s, costs, h=None, ha=None):
     '''Constructs and compiles the necessary Theano functions.
 
   p : list of Theano shared variables
@@ -44,7 +44,11 @@ train :
       Monitoring costs, the first of which will be the optimized objective.
   h: Theano variable or None
       Structural damping is applied to this variable (typically the hidden units
-      of an RNN).'''
+      of an RNN).
+  ha: Theano variable or None
+    Symbolic variable that implicitly defines the Gauss-Newton matrix for the
+    structural damping term (typically the activation of the hidden layer). If
+    None, it will be set to `h`.'''
 
     self.p = p
     self.shapes = [i.get_value().shape for i in p]
@@ -65,7 +69,8 @@ train :
     if h is not None:  # structural damping with cross-entropy
       h_constant = symbolic_types[h.ndim]()  # T.Rop does not support `consider_constant` yet, so use `givens`
       structural_damping = coefficient * (-h_constant*T.log(h + 1e-10) - (1-h_constant)*T.log((1-h) + 1e-10)).sum() / h.shape[0]
-      Gv_damping = gauss_newton_product(structural_damping, p, v, h)
+      if ha is None: ha = h
+      Gv_damping = gauss_newton_product(structural_damping, p, v, ha)
       Gv = [a + b for a, b in zip(Gv, Gv_damping)]
       givens = {h_constant: h}
     else:
