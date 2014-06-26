@@ -20,6 +20,9 @@ In comparison, SGD can solve this problem about 0.0% of the time.
 It is available here:
 https://github.com/boulanni/theano-hf
 
+If you use this software for academic research, please cite the following paper:
+
+[1] N. Boulanger-Lewandowski, Y. Bengio and P. Vincent, "Modeling Temporal Dependencies in High-Dimensional Sequences: Application to Polyphonic Music Generation and Transcription", Proc. ICML 29, 2012.
 
 Author: Nicolas Boulanger-Lewandowski
 University of Montreal, 2012
